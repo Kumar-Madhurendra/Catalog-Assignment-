@@ -2,13 +2,16 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <cmath>
-#include "nlohmann/json.hpp"   
+#include <numeric> // for gcd
+#include "nlohmann/json.hpp"
+#include <boost/multiprecision/cpp_int.hpp>
+
+
 
 using namespace std;
 using json = nlohmann::json;
 
- 
+// Converts base-N encoded string into a decimal integer
 long long convertToDecimal(const string& val, int base) {
     long long result = 0;
     for (char c : val) {
@@ -20,29 +23,44 @@ long long convertToDecimal(const string& val, int base) {
     return result;
 }
 
- 
-long long lagrangeInterpolation(const vector<pair<int, long long>>& points) {
-    long double secret = 0.0;
-    int k = points.size();
-
-    for (int i = 0; i < k; ++i) {
-        long double xi = points[i].first;
-        long double yi = points[i].second;
-        long double term = yi;
-
-        for (int j = 0; j < k; ++j) {
-            if (i != j) {
-                long double xj = points[j].first;
-                term *= -xj / (xi - xj);
-            }
-        }
-        secret += term;
-    }
-
-    return static_cast<long long>(round(secret));
+// Helper function to compute GCD
+long long gcd(long long a, long long b) {
+    return b ? gcd(b, a % b) : abs(a);
 }
 
- 
+// Computes the Lagrange interpolation at x=0 using exact fraction arithmetic
+long long lagrangeInterpolation(const vector<pair<int, long long>>& points) {
+    long long numerator = 0;
+    long long denominator = 1;
+
+    for (int i = 0; i < points.size(); ++i) {
+        long long xi = points[i].first;
+        long long yi = points[i].second;
+
+        long long num = yi;
+        long long den = 1;
+
+        for (int j = 0; j < points.size(); ++j) {
+            if (i == j) continue;
+            long long xj = points[j].first;
+            num *= -xj;
+            den *= (xi - xj);
+        }
+
+        // Add this term to total (cross-multiplication to handle fractions)
+        numerator = numerator * den + num * denominator;
+        denominator *= den;
+
+        // Simplify fraction (optional but helps avoid overflow)
+        long long g = gcd(numerator, denominator);
+        numerator /= g;
+        denominator /= g;
+    }
+
+    return numerator / denominator; // secret at x = 0
+}
+
+// Reads JSON and reconstructs the secret
 long long processFile(const string& filename) {
     ifstream file(filename);
     if (!file.is_open()) {
